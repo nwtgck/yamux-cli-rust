@@ -1,0 +1,16 @@
+[package]
+name = "yamux-cli"
+version = "0.1.0-SNAPSHOT"
+edition = "2021"
+
+[[bin]]
+name = "yamux"
+path = "src/main.rs"
+
+[dependencies]
+yamux = "0.10"
+futures = "0.3"
+# TODO: not full
+tokio = { version = "1.0", features = ["full"] }
+tokio-util = { version = "0.6", features=["compat"] }
+anyhow = "1.0"
