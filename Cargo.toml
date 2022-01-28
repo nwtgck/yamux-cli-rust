@@ -14,3 +14,4 @@ futures = "0.3"
 tokio = { version = "1.0", features = ["full"] }
 tokio-util = { version = "0.6", features=["compat"] }
 anyhow = "1.0"
+pin-project-lite = "0.2"

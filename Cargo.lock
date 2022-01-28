@@ -480,6 +480,7 @@ version = "0.1.0-SNAPSHOT"
 dependencies = [
  "anyhow",
  "futures",
+ "pin-project-lite",
  "tokio",
  "tokio-util",
  "yamux",
