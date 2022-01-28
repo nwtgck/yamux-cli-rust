@@ -15,18 +15,19 @@ async fn serve() -> Result<()> {
     let yamux_server = yamux::Connection::new(stdio, yamux_config, yamux::Mode::Server);
     yamux::into_stream(yamux_server)
         .try_for_each_concurrent(None, |yamux_stream| async move {
-            use tokio_util::compat::{FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
             let (yamux_stream_read, yamux_write) = yamux_stream.split();
             let (mut connection_read, mut connection_write) =
                 tokio::net::TcpStream::connect("127.0.0.1:2022")
                     .await?
                     .into_split();
             tokio::spawn(async move {
+                use tokio_util::compat::FuturesAsyncReadCompatExt;
                 tokio::io::copy(&mut yamux_stream_read.compat(), &mut connection_write)
                     .await
                     .unwrap();
             });
             tokio::spawn(async move {
+                use tokio_util::compat::FuturesAsyncWriteCompatExt;
                 tokio::io::copy(&mut connection_read, &mut yamux_write.compat_write())
                     .await
                     .unwrap();
