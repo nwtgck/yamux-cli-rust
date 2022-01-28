@@ -1,7 +1,7 @@
 use pin_project_lite::pin_project;
+use std::io::Write;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use tokio::io::AsyncWrite;
 
 pin_project! {
     pub struct Stdio {
@@ -28,17 +28,7 @@ impl futures::AsyncRead for Stdio {
         cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<std::io::Result<usize>> {
-        use tokio_util::compat::TokioAsyncReadCompatExt;
-        let this = self.project();
-        eprintln!("> poll read: {:?}", buf);
-        // let res = Pin::new(&mut tokio::io::stdin().compat()).poll_read(cx, buf);
-        let res = this.stdin.poll_read(cx, buf);
-        eprintln!("< poll read: {:?}", buf);
-        return res;
-        // eprintln!("> poll read: {:?}", buf);
-        // let res = Pin::new(&mut futures::io::AllowStdIo::new(std::io::stdin())).poll_read(cx, buf);
-        // eprintln!("< poll read: {:?}", buf);
-        // return res;
+        return self.project().stdin.poll_read(cx, buf);
     }
 }
 
@@ -48,30 +38,19 @@ impl futures::AsyncWrite for Stdio {
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<std::io::Result<usize>> {
-        use tokio_util::compat::TokioAsyncWriteCompatExt;
-        let this = self.project();
-
-        eprintln!("> poll write: {:?}", buf);
-        // let res =
-        //     Pin::new(&mut futures::io::AllowStdIo::new(std::io::stdout())).poll_write(cx, buf);
-        // std::io::stdout().flush();
-        // let res = Pin::new(&mut tokio::io::stdout().compat_write()).poll_write(cx, buf);
-        let res = this.stdout.poll_write(cx, buf);
-        eprintln!("< poll write: {:?}", buf);
-        return res;
+        let poll = self.project().stdout.poll_write(cx, buf);
+        // FIXME: dirty but works
+        std::thread::spawn(|| {
+            std::io::stdout().flush().unwrap();
+        });
+        return poll;
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        use tokio_util::compat::TokioAsyncWriteCompatExt;
-        let this = self.project();
-        // return Pin::new(&mut tokio::io::stdout().compat_write()).poll_flush(cx);
-        return this.stdout.poll_flush(cx);
+        return self.project().stdout.poll_flush(cx);
     }
 
     fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        use tokio_util::compat::TokioAsyncWriteCompatExt;
-        let this = self.project();
-        // return Pin::new(&mut tokio::io::stdout().compat_write()).poll_flush(cx);
-        return this.stdout.poll_close(cx);
+        return self.project().stdout.poll_close(cx);
     }
 }
