@@ -29,7 +29,7 @@ impl futures::AsyncRead for Stdio {
         buf: &mut [u8],
     ) -> Poll<std::io::Result<usize>> {
         use tokio_util::compat::TokioAsyncReadCompatExt;
-        let mut this = self.project();
+        let this = self.project();
         eprintln!("> poll read: {:?}", buf);
         // let res = Pin::new(&mut tokio::io::stdin().compat()).poll_read(cx, buf);
         let res = this.stdin.poll_read(cx, buf);
@@ -49,7 +49,7 @@ impl futures::AsyncWrite for Stdio {
         buf: &[u8],
     ) -> Poll<std::io::Result<usize>> {
         use tokio_util::compat::TokioAsyncWriteCompatExt;
-        let mut this = self.project();
+        let this = self.project();
 
         eprintln!("> poll write: {:?}", buf);
         // let res =
@@ -63,14 +63,14 @@ impl futures::AsyncWrite for Stdio {
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         use tokio_util::compat::TokioAsyncWriteCompatExt;
-        let mut this = self.project();
+        let this = self.project();
         // return Pin::new(&mut tokio::io::stdout().compat_write()).poll_flush(cx);
         return this.stdout.poll_flush(cx);
     }
 
     fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         use tokio_util::compat::TokioAsyncWriteCompatExt;
-        let mut this = self.project();
+        let this = self.project();
         // return Pin::new(&mut tokio::io::stdout().compat_write()).poll_flush(cx);
         return this.stdout.poll_close(cx);
     }
