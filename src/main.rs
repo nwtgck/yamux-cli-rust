@@ -20,18 +20,19 @@ async fn serve() -> Result<()> {
                 tokio::net::TcpStream::connect("127.0.0.1:2022")
                     .await?
                     .into_split();
-            tokio::spawn(async move {
+            let f1 = async move {
                 use tokio_util::compat::FuturesAsyncReadCompatExt;
                 tokio::io::copy(&mut yamux_stream_read.compat(), &mut connection_write)
                     .await
                     .unwrap();
-            });
-            tokio::spawn(async move {
+            };
+            let f2 = async move {
                 use tokio_util::compat::FuturesAsyncWriteCompatExt;
                 tokio::io::copy(&mut connection_read, &mut yamux_write.compat_write())
                     .await
                     .unwrap();
-            });
+            };
+            futures::future::join(f1, f2).await;
             Ok(())
         })
         .await?;
