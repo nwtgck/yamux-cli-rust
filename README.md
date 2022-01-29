@@ -1,4 +1,6 @@
 # yamux
+[![CI](https://github.com/nwtgck/yamux-cli-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/nwtgck/yamux-cli-rust/actions/workflows/ci.yml)
+
 Multiplexing TCP connection CLI using [yamux](https://github.com/hashicorp/yamux/blob/master/spec.md)
 
 ### Linux
