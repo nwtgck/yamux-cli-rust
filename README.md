@@ -1,6 +1,29 @@
 # yamux
 Multiplexing TCP connection CLI using [yamux](https://github.com/hashicorp/yamux/blob/master/spec.md)
 
+### Linux
+
+```bash
+curl -L https://github.com/nwtgck/yamux-cli-rust/releases/download/v0.1.0/yamux-x86_64-unknown-linux-musl.tar.gz | tar xzf -
+./yamux-x86_64-unknown-linux-musl/yamux --help
+```
+
+### macOS (Intel)
+
+```bash
+curl -L https://github.com/nwtgck/yamux-cli-rust/releases/download/v0.1.0/yamux-x86_64-apple-darwin.tar.gz | tar xzf -
+./yamux-x86_64-apple-darwin/yamux --help
+```
+
+### macOS (Apple Silicon)
+
+```bash
+curl -L https://github.com/nwtgck/yamux-cli-rust/releases/download/v0.1.0/yamux-aarch64-apple-darwin.tar.gz | tar xzf -
+./yamux-aarch64-apple-darwin/yamux --help
+```
+
+Other binaries are found in <https://github.com/nwtgck/yamux-cli-rust/releases>.
+
 ## Usage
 
 ### TCP
