@@ -1,0 +1,19 @@
+[package]
+name = "yamux-cli"
+version = "0.1.0-SNAPSHOT"
+edition = "2021"
+
+[[bin]]
+name = "yamux"
+path = "src/main.rs"
+
+[dependencies]
+yamux = "0.10"
+futures = { version = "0.3", default-features = false, features = ["std"] }
+tokio = { version = "1.16", features = ["rt-multi-thread", "macros", "net", "io-std", "io-util"] }
+tokio-util = { version = "0.6", features=["compat"] }
+anyhow = "1.0"
+pin-project-lite = "0.2"
+clap = { version = "3.0.13", features = ["derive"] }
+log = "0.4"
+env_logger = "0.9"
