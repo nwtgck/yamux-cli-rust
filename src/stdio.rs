@@ -41,6 +41,7 @@ impl futures::AsyncWrite for Stdio {
         let poll = self.project().stdout.poll_write(cx, buf);
         // FIXME: dirty but works (should not flush in poll_write, should flush in copy or something)
         // NOTE: tokio::spawn() with tokio::io::stdout().flush().await and tokio::task::spawn_blocking do not work
+        // Maybe fixed by https://github.com/tokio-rs/tokio/pull/4348
         std::thread::spawn(|| {
             std::io::stdout().flush().unwrap();
         });
