@@ -1,0 +1,144 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  cargo_fmt:
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - run: cargo fmt --all -- --check
+
+  cross_build:
+    strategy:
+      matrix:
+        target:
+          - aarch64-unknown-linux-musl
+          - arm-linux-androideabi
+          - arm-unknown-linux-musleabi
+          - arm-unknown-linux-musleabihf
+          - armv5te-unknown-linux-musleabi
+          - armv7-linux-androideabi
+          - armv7-unknown-linux-musleabihf
+          - i586-unknown-linux-musl
+          - i686-linux-android
+          - i686-unknown-linux-musl
+          - x86_64-linux-android
+          - x86_64-pc-windows-gnu
+          - x86_64-unknown-linux-musl
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install cross
+        run: curl -L https://github.com/rust-embedded/cross/releases/download/v0.2.1/cross-v0.2.1-x86_64-unknown-linux-gnu.tar.gz | tar xzf -
+      - run: ./cross build --target=${{ matrix.target }} --release --locked
+      - name: Archive binary
+        run: |
+          set -eu
+          mkdir ./yamux-${{ matrix.target }}
+          if [[ "${{ matrix.target }}" == *"-windows-"* ]]; then
+            cp ./target/${{ matrix.target }}/release/yamux.exe ./yamux-${{ matrix.target }}
+            zip -r ./yamux-${{ matrix.target }}.zip ./yamux-${{ matrix.target }}
+          else
+            cp ./target/${{ matrix.target }}/release/yamux ./yamux-${{ matrix.target }}
+            tar zcf ./yamux-${{ matrix.target }}.tar.gz ./yamux-${{ matrix.target }}
+          fi
+      - uses: actions/upload-artifact@v2
+        with:
+          name: cross_build_artifact
+          path: |
+            yamux-*.tar.gz
+            yamux-*.zip
+
+  linux_operational_test:
+    needs:
+      - cross_build
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Run Nginx
+        run: docker run -d -p 8080:80 nginx:alpine
+      - name: Download the artifact (cross build)
+        uses: actions/download-artifact@v2
+        with:
+          name: cross_build_artifact
+      - name: Extract binary
+        run: tar xf yamux-x86_64-unknown-linux-musl.tar.gz
+      - name: Normal TCP
+        run: |
+          set -eu
+          cp ./yamux-x86_64-unknown-linux-musl/yamux yamux
+          mkfifo my_pipe
+          cat my_pipe | ./yamux localhost 8080 | ./yamux -l 8081 > ./my_pipe &
+          sleep 1
+          curl localhost:8080 > expected_response.txt
+          # HTTP GET request twice
+          diff expected_response.txt <(curl localhost:8081)
+          diff expected_response.txt <(curl localhost:8081)
+          kill %1
+          rm my_pipe
+      - name: Normal TCP specifying host when listening
+        run: |
+          set -eu
+          cp ./yamux-x86_64-unknown-linux-musl/yamux yamux
+          mkfifo my_pipe
+          cat my_pipe | ./yamux localhost 8080 | ./yamux -l localhost 8081 > ./my_pipe &
+          sleep 1
+          curl localhost:8080 > expected_response.txt
+          # HTTP GET request twice
+          diff expected_response.txt <(curl localhost:8081)
+          diff expected_response.txt <(curl localhost:8081)
+          kill %1
+          rm my_pipe
+
+  build_for_mac:
+    strategy:
+      matrix:
+        target:
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+    runs-on: macOS-11
+    steps:
+      - uses: actions/checkout@v2
+      - run: rustup target add ${{ matrix.target }}
+      - run: cargo build --target=${{ matrix.target }} --release --locked
+      - name: Archive binary
+        run: |
+          set -eu
+          mkdir ./yamux-${{ matrix.target }}
+          cp ./target/${{ matrix.target }}/release/yamux ./yamux-${{ matrix.target }}
+          tar zcf ./yamux-${{ matrix.target }}.tar.gz ./yamux-${{ matrix.target }}
+      - uses: actions/upload-artifact@v2
+        with:
+          name: mac_build_artifact
+          path: |
+            yamux-*.tar.gz
+
+  release_if_tag_exits:
+    needs:
+      - cargo_fmt
+      - linux_operational_test
+      - build_for_mac
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Download the artifact (cross build)
+        uses: actions/download-artifact@v2
+        with:
+          name: cross_build_artifact
+          path: ./publish_dir
+      - name: Download the artifact (macOS)
+        uses: actions/download-artifact@v2
+        with:
+          name: mac_build_artifact
+          path: ./publish_dir
+      - run: ls -la ./publish_dir
+      - name: Release
+        if: contains(github.ref, 'refs/tags/')
+        run: |
+          set -eux
+          # Show and create checksums
+          (cd publish_dir && sha256sum * | tee /dev/stderr > sha256sums.txt)
+          TAG=$(echo $GITHUB_REF | cut -d / -f 3)
+          VERSION=$TAG
+          REPO=$(echo $GITHUB_REPOSITORY | cut -d / -f 2)
+          curl -L https://github.com/tcnksm/ghr/releases/download/v0.14.0/ghr_v0.14.0_linux_amd64.tar.gz | tar xzf -
+          ./ghr_v0.14.0_linux_amd64/ghr -t ${{ secrets.GITHUB_TOKEN }} -u ${GITHUB_ACTOR} -r ${REPO} -c ${GITHUB_SHA} -delete ${VERSION} ./publish_dir
