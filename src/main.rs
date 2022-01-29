@@ -1,4 +1,5 @@
 mod stdio;
+mod tcp_or_unix_listener;
 
 use clap::Parser;
 
@@ -31,12 +32,14 @@ async fn main() -> anyhow::Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     if args.listen {
-        let listener: Listener;
+        let listener: tcp_or_unix_listener::Listener;
         if args.unixsock {
             if args.rest_args.len() != 1 {
                 return Err(anyhow::Error::msg("unix domain socket is missing"));
             }
-            listener = Listener::UnixListener(tokio::net::UnixListener::bind(&args.rest_args[0])?);
+            listener = tcp_or_unix_listener::Listener::UnixListener(
+                tokio::net::UnixListener::bind(&args.rest_args[0])?,
+            );
         } else {
             let mut host: &str = "0.0.0.0";
             let port: u16;
@@ -48,7 +51,9 @@ async fn main() -> anyhow::Result<()> {
             } else {
                 return Err(anyhow::Error::msg("port number is missing"));
             }
-            listener = Listener::TcpListener(tokio::net::TcpListener::bind((host, port)).await?);
+            listener = tcp_or_unix_listener::Listener::TcpListener(
+                tokio::net::TcpListener::bind((host, port)).await?,
+            );
         }
         return run_yamux_client(listener).await;
     }
@@ -101,54 +106,7 @@ async fn run_yamux_server(host: &str, port: u16) -> anyhow::Result<()> {
     Ok(())
 }
 
-enum Listener {
-    TcpListener(tokio::net::TcpListener),
-    UnixListener(tokio::net::UnixListener),
-}
-
-#[auto_enums::enum_derive(tokio1::AsyncRead)]
-enum TcpOrUnixAsyncRead {
-    TcpAsyncRead(tokio::net::tcp::OwnedReadHalf),
-    UnixAsyncRead(tokio::net::unix::OwnedReadHalf),
-}
-
-#[auto_enums::enum_derive(tokio1::AsyncWrite)]
-enum TcpOrUnixAsyncWrite {
-    TcpAsyncWrite(tokio::net::tcp::OwnedWriteHalf),
-    UnixAsyncWrite(tokio::net::unix::OwnedWriteHalf),
-}
-
-impl Listener {
-    fn poll_accept(
-        &self,
-        cx: &mut core::task::Context<'_>,
-    ) -> core::task::Poll<tokio::io::Result<(TcpOrUnixAsyncRead, TcpOrUnixAsyncWrite)>> {
-        match self {
-            Listener::TcpListener(tcp_listener) => {
-                let poll = tcp_listener.poll_accept(cx);
-                poll.map_ok(|(tcp_stream, _)| {
-                    let (r, w) = tcp_stream.into_split();
-                    (
-                        TcpOrUnixAsyncRead::TcpAsyncRead(r),
-                        TcpOrUnixAsyncWrite::TcpAsyncWrite(w),
-                    )
-                })
-            }
-            Listener::UnixListener(unix_listener) => {
-                let poll = unix_listener.poll_accept(cx);
-                poll.map_ok(|(tcp_stream, _)| {
-                    let (r, w) = tcp_stream.into_split();
-                    (
-                        TcpOrUnixAsyncRead::UnixAsyncRead(r),
-                        TcpOrUnixAsyncWrite::UnixAsyncWrite(w),
-                    )
-                })
-            }
-        }
-    }
-}
-
-async fn run_yamux_client(listener: Listener) -> anyhow::Result<()> {
+async fn run_yamux_client(listener: tcp_or_unix_listener::Listener) -> anyhow::Result<()> {
     let yamux_config = yamux::Config::default();
     let yamux_client =
         yamux::Connection::new(stdio::Stdio::new(), yamux_config, yamux::Mode::Client);
