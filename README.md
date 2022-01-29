@@ -1,5 +1,30 @@
 # yamux
+[![CI](https://github.com/nwtgck/yamux-cli-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/nwtgck/yamux-cli-rust/actions/workflows/ci.yml)
+
 Multiplexing TCP connection CLI using [yamux](https://github.com/hashicorp/yamux/blob/master/spec.md)
+
+### Linux
+
+```bash
+curl -L https://github.com/nwtgck/yamux-cli-rust/releases/download/v0.1.0/yamux-x86_64-unknown-linux-musl.tar.gz | tar xzf -
+./yamux-x86_64-unknown-linux-musl/yamux --help
+```
+
+### macOS (Intel)
+
+```bash
+curl -L https://github.com/nwtgck/yamux-cli-rust/releases/download/v0.1.0/yamux-x86_64-apple-darwin.tar.gz | tar xzf -
+./yamux-x86_64-apple-darwin/yamux --help
+```
+
+### macOS (Apple Silicon)
+
+```bash
+curl -L https://github.com/nwtgck/yamux-cli-rust/releases/download/v0.1.0/yamux-aarch64-apple-darwin.tar.gz | tar xzf -
+./yamux-aarch64-apple-darwin/yamux --help
+```
+
+Other binaries are found in <https://github.com/nwtgck/yamux-cli-rust/releases>.
 
 ## Usage
 
@@ -11,6 +36,16 @@ Multiplexing TCP connection CLI using [yamux](https://github.com/hashicorp/yamux
 
 ```bash
 ... | yamux -l 8080 | ...
+```
+
+### Unix domain socket
+
+```bash
+... | yamux -U /unix/domain/socket/path | ...
+```
+
+```bash
+... | yamux -U -l /unix/domain/socket/path | ...
 ```
 
 ## Complete example
