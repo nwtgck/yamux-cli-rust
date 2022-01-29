@@ -1,6 +1,5 @@
 mod stdio;
 
-use anyhow::Result;
 use clap::Parser;
 
 // TODO: variable names
@@ -23,7 +22,7 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> anyhow::Result<()> {
     // Parse arguments
     let args = Args::parse();
 
@@ -51,7 +50,7 @@ async fn main() -> Result<()> {
     return run_yamux_server(host, port).await;
 }
 
-async fn run_yamux_server(host: &str, port: u16) -> Result<()> {
+async fn run_yamux_server(host: &str, port: u16) -> anyhow::Result<()> {
     use futures::TryStreamExt;
 
     let yamux_config = yamux::Config::default();
@@ -86,7 +85,7 @@ async fn run_yamux_server(host: &str, port: u16) -> Result<()> {
     Ok(())
 }
 
-async fn run_yamux_client(host: &str, port: u16) -> Result<()> {
+async fn run_yamux_client(host: &str, port: u16) -> anyhow::Result<()> {
     let yamux_config = yamux::Config::default();
     let yamux_client =
         yamux::Connection::new(stdio::Stdio::new(), yamux_config, yamux::Mode::Client);
