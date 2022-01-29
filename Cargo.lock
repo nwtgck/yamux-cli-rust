@@ -672,6 +672,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "auto_enums",
+ "cfg-if",
  "clap",
  "env_logger",
  "futures",

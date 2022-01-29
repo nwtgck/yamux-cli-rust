@@ -37,9 +37,15 @@ async fn main() -> anyhow::Result<()> {
             if args.rest_args.len() != 1 {
                 return Err(anyhow::Error::msg("unix domain socket is missing"));
             }
-            listener = tcp_or_unix_listener::Listener::UnixListener(
-                tokio::net::UnixListener::bind(&args.rest_args[0])?,
-            );
+            cfg_if::cfg_if! {
+                if #[cfg(unix)] {
+                    listener = tcp_or_unix_listener::Listener::UnixListener(
+                        tokio::net::UnixListener::bind(&args.rest_args[0])?,
+                    );
+                } else {
+                    return Err(anyhow::Error::msg("unix domain socket not supported"));
+                }
+            }
         } else {
             let mut host: &str = "0.0.0.0";
             let port: u16;

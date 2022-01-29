@@ -1,18 +1,33 @@
 pub enum Listener {
     TcpListener(tokio::net::TcpListener),
+    #[cfg(unix)]
     UnixListener(tokio::net::UnixListener),
 }
 
+#[cfg(unix)]
 #[auto_enums::enum_derive(tokio1::AsyncRead)]
 pub enum TcpOrUnixAsyncRead {
     TcpAsyncRead(tokio::net::tcp::OwnedReadHalf),
     UnixAsyncRead(tokio::net::unix::OwnedReadHalf),
 }
 
+#[cfg(not(unix))]
+#[auto_enums::enum_derive(tokio1::AsyncRead)]
+pub enum TcpOrUnixAsyncRead {
+    TcpAsyncRead(tokio::net::tcp::OwnedReadHalf),
+}
+
+#[cfg(unix)]
 #[auto_enums::enum_derive(tokio1::AsyncWrite)]
 pub enum TcpOrUnixAsyncWrite {
     TcpAsyncWrite(tokio::net::tcp::OwnedWriteHalf),
     UnixAsyncWrite(tokio::net::unix::OwnedWriteHalf),
+}
+
+#[cfg(not(unix))]
+#[auto_enums::enum_derive(tokio1::AsyncWrite)]
+pub enum TcpOrUnixAsyncWrite {
+    TcpAsyncWrite(tokio::net::tcp::OwnedWriteHalf),
 }
 
 impl Listener {
@@ -31,6 +46,7 @@ impl Listener {
                     )
                 })
             }
+            #[cfg(unix)]
             Listener::UnixListener(unix_listener) => {
                 let poll = unix_listener.poll_accept(cx);
                 poll.map_ok(|(tcp_stream, _)| {
