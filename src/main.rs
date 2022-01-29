@@ -1,5 +1,5 @@
+mod listen_and_connect;
 mod stdio;
-mod tcp_or_unix_listener;
 
 use clap::Parser;
 
@@ -32,14 +32,14 @@ async fn main() -> anyhow::Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     if args.listen {
-        let listener: tcp_or_unix_listener::Listener;
+        let listener: listen_and_connect::Listener;
         if args.unixsock {
             if args.rest_args.len() != 1 {
-                return Err(anyhow::Error::msg("unix domain socket is missing"));
+                return Err(anyhow::Error::msg("Unix domain socket is missing"));
             }
             cfg_if::cfg_if! {
                 if #[cfg(unix)] {
-                    listener = tcp_or_unix_listener::Listener::UnixListener(
+                    listener = listen_and_connect::Listener::UnixListener(
                         tokio::net::UnixListener::bind(&args.rest_args[0])?,
                     );
                 } else {
@@ -57,62 +57,94 @@ async fn main() -> anyhow::Result<()> {
             } else {
                 return Err(anyhow::Error::msg("port number is missing"));
             }
-            listener = tcp_or_unix_listener::Listener::TcpListener(
+            listener = listen_and_connect::Listener::TcpListener(
                 tokio::net::TcpListener::bind((host, port)).await?,
             );
         }
         return run_yamux_client(listener).await;
     }
 
-    if args.rest_args.len() != 2 {
-        return Err(anyhow::Error::msg("host and port number are missing"));
-    }
-    // NOTE: should not use std::net::IpAddr because "localhost" could not be the type
-    let host: &str = &args.rest_args[0];
-    let port: u16 = args.rest_args[1].parse()?;
+    let connect_setting: listen_and_connect::ConnectSetting;
+    if args.unixsock {
+        if args.rest_args.len() != 1 {
+            return Err(anyhow::Error::msg("Unix domain socket is missing"));
+        }
+        cfg_if::cfg_if! {
+            if #[cfg(unix)] {
+                connect_setting = listen_and_connect::ConnectSetting::UnixConnectSetting {
+                    path: args.rest_args[0].to_string(),
+                };
+            } else {
+                return Err(anyhow::Error::msg("unix domain socket not supported"));
+            }
+        }
+    } else {
+        if args.rest_args.len() != 2 {
+            return Err(anyhow::Error::msg("host and port number are missing"));
+        }
+        // NOTE: should not use std::net::IpAddr because "localhost" could not be the type
+        let host: &str = &args.rest_args[0];
+        let port: u16 = args.rest_args[1].parse()?;
 
-    return run_yamux_server(host, port).await;
+        connect_setting = listen_and_connect::ConnectSetting::TcpConnectSetting {
+            host: host.to_string(),
+            port,
+        };
+    }
+    return run_yamux_server(connect_setting).await;
 }
 
-async fn run_yamux_server(host: &str, port: u16) -> anyhow::Result<()> {
+async fn run_yamux_server(
+    connect_setting: listen_and_connect::ConnectSetting,
+) -> anyhow::Result<()> {
     use futures::TryStreamExt;
 
     let yamux_config = yamux::Config::default();
     let yamux_connection =
         yamux::Connection::new(stdio::Stdio::new(), yamux_config, yamux::Mode::Server);
     yamux::into_stream(yamux_connection)
-        .try_for_each_concurrent(None, |yamux_stream| async move {
-            let (yamux_stream_read, yamux_stream_write) = {
-                use futures::AsyncReadExt;
-                yamux_stream.split()
-            };
-            let tcp_stream_result = tokio::net::TcpStream::connect((host, port)).await;
-            if let Err(err) = tcp_stream_result {
-                log::warn!("failed to connect {:}:{:}: {:}", host, port, err);
-                return Ok(());
+        .try_for_each_concurrent(None, |yamux_stream| {
+            let connect_setting = connect_setting.clone();
+            async move {
+                let (yamux_stream_read, yamux_stream_write) = {
+                    use futures::AsyncReadExt;
+                    yamux_stream.split()
+                };
+                let tcp_stream_result = connect_setting.connect().await;
+                if let Err(err) = tcp_stream_result {
+                    match connect_setting {
+                        listen_and_connect::ConnectSetting::TcpConnectSetting { host, port } => {
+                            log::warn!("failed to connect {:}:{:}: {:}", host, port, err)
+                        }
+                        #[cfg(unix)]
+                        listen_and_connect::ConnectSetting::UnixConnectSetting { path } => {
+                            log::warn!("failed to connect {:}: {:}", path, err)
+                        }
+                    }
+                    return Ok(());
+                }
+                let (mut tcp_stream_read, mut tcp_stream_write) = tcp_stream_result.unwrap();
+                let fut1 = async move {
+                    use tokio_util::compat::FuturesAsyncReadCompatExt;
+                    tokio::io::copy(&mut yamux_stream_read.compat(), &mut tcp_stream_write)
+                        .await
+                        .unwrap();
+                };
+                let fut2 = async move {
+                    use tokio_util::compat::FuturesAsyncWriteCompatExt;
+                    tokio::io::copy(&mut tcp_stream_read, &mut yamux_stream_write.compat_write())
+                        .await
+                        .unwrap();
+                };
+                futures::future::join(fut1, fut2).await;
+                Ok(())
             }
-            let (mut tcp_stream_read, mut tcp_stream_write) =
-                tcp_stream_result.unwrap().into_split();
-            let fut1 = async move {
-                use tokio_util::compat::FuturesAsyncReadCompatExt;
-                tokio::io::copy(&mut yamux_stream_read.compat(), &mut tcp_stream_write)
-                    .await
-                    .unwrap();
-            };
-            let fut2 = async move {
-                use tokio_util::compat::FuturesAsyncWriteCompatExt;
-                tokio::io::copy(&mut tcp_stream_read, &mut yamux_stream_write.compat_write())
-                    .await
-                    .unwrap();
-            };
-            futures::future::join(fut1, fut2).await;
-            Ok(())
         })
         .await?;
     Ok(())
 }
 
-async fn run_yamux_client(listener: tcp_or_unix_listener::Listener) -> anyhow::Result<()> {
+async fn run_yamux_client(listener: listen_and_connect::Listener) -> anyhow::Result<()> {
     let yamux_config = yamux::Config::default();
     let yamux_client =
         yamux::Connection::new(stdio::Stdio::new(), yamux_config, yamux::Mode::Client);
