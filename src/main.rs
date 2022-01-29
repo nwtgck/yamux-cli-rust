@@ -2,8 +2,6 @@ mod stdio;
 
 use clap::Parser;
 
-// TODO: logging
-
 /// yamux
 /// Examples: `yamux localhost 80`, `yamux -l 8080`
 #[derive(clap::Parser, Debug)]
@@ -24,6 +22,9 @@ struct Args {
 async fn main() -> anyhow::Result<()> {
     // Parse arguments
     let args = Args::parse();
+
+    // Set default log level
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     if args.listen {
         let mut host: &str = "0.0.0.0";
@@ -61,10 +62,13 @@ async fn run_yamux_server(host: &str, port: u16) -> anyhow::Result<()> {
                 use futures::AsyncReadExt;
                 yamux_stream.split()
             };
+            let tcp_stream_result = tokio::net::TcpStream::connect((host, port)).await;
+            if let Err(err) = tcp_stream_result {
+                log::warn!("failed to connect {:}:{:}: {:}", host, port, err);
+                return Ok(());
+            }
             let (mut tcp_stream_read, mut tcp_stream_write) =
-                tokio::net::TcpStream::connect((host, port))
-                    .await?
-                    .into_split();
+                tcp_stream_result.unwrap().into_split();
             let fut1 = async move {
                 use tokio_util::compat::FuturesAsyncReadCompatExt;
                 tokio::io::copy(&mut yamux_stream_read.compat(), &mut tcp_stream_write)
@@ -106,8 +110,7 @@ async fn run_yamux_client(host: &str, port: u16) -> anyhow::Result<()> {
         tokio::task::spawn(async move {
             let yamux_stream_result = yamux_control.open_stream().await;
             if let Err(err) = yamux_stream_result {
-                // TODO: logging
-                eprintln!("failed to open: {:?}", err);
+                log::error!("failed to open stream: {:}", err);
                 return;
             }
             let (yamux_stream_read, yamux_stream_write) = {
