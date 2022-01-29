@@ -2,7 +2,6 @@ mod stdio;
 
 use clap::Parser;
 
-// TODO: variable names
 // TODO: logging
 
 /// yamux
@@ -54,27 +53,27 @@ async fn run_yamux_server(host: &str, port: u16) -> anyhow::Result<()> {
     use futures::TryStreamExt;
 
     let yamux_config = yamux::Config::default();
-    let yamux_server =
+    let yamux_connection =
         yamux::Connection::new(stdio::Stdio::new(), yamux_config, yamux::Mode::Server);
-    yamux::into_stream(yamux_server)
+    yamux::into_stream(yamux_connection)
         .try_for_each_concurrent(None, |yamux_stream| async move {
-            let (yamux_stream_read, yamux_write) = {
+            let (yamux_stream_read, yamux_stream_write) = {
                 use futures::AsyncReadExt;
                 yamux_stream.split()
             };
-            let (mut connection_read, mut connection_write) =
+            let (mut tcp_stream_read, mut tcp_stream_write) =
                 tokio::net::TcpStream::connect((host, port))
                     .await?
                     .into_split();
             let fut1 = async move {
                 use tokio_util::compat::FuturesAsyncReadCompatExt;
-                tokio::io::copy(&mut yamux_stream_read.compat(), &mut connection_write)
+                tokio::io::copy(&mut yamux_stream_read.compat(), &mut tcp_stream_write)
                     .await
                     .unwrap();
             };
             let fut2 = async move {
                 use tokio_util::compat::FuturesAsyncWriteCompatExt;
-                tokio::io::copy(&mut connection_read, &mut yamux_write.compat_write())
+                tokio::io::copy(&mut tcp_stream_read, &mut yamux_stream_write.compat_write())
                     .await
                     .unwrap();
             };
@@ -100,8 +99,8 @@ async fn run_yamux_client(host: &str, port: u16) -> anyhow::Result<()> {
     let tcp_listener = tokio::net::TcpListener::bind((host, port)).await?;
 
     loop {
-        let (socket, _) = tcp_listener.accept().await?;
-        let (mut socket_read, mut socket_write) = socket.into_split();
+        let (tcp_stream, _) = tcp_listener.accept().await?;
+        let (mut tcp_stream_read, mut tcp_stream_write) = tcp_stream.into_split();
 
         let mut yamux_control = yamux_control.clone();
         tokio::task::spawn(async move {
@@ -115,16 +114,15 @@ async fn run_yamux_client(host: &str, port: u16) -> anyhow::Result<()> {
                 use futures::AsyncReadExt;
                 yamux_stream_result.unwrap().split()
             };
-
             let fut1 = async move {
                 use tokio_util::compat::FuturesAsyncReadCompatExt;
-                tokio::io::copy(&mut yamux_stream_read.compat(), &mut socket_write)
+                tokio::io::copy(&mut yamux_stream_read.compat(), &mut tcp_stream_write)
                     .await
                     .unwrap();
             };
             let fut2 = async move {
                 use tokio_util::compat::FuturesAsyncWriteCompatExt;
-                tokio::io::copy(&mut socket_read, &mut yamux_stream_write.compat_write())
+                tokio::io::copy(&mut tcp_stream_read, &mut yamux_stream_write.compat_write())
                     .await
                     .unwrap();
             };
