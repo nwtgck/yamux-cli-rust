@@ -36,8 +36,7 @@ async fn main() -> Result<()> {
     let host: &str = &args.rest_args[0];
     let port: u16 = args.rest_args[1].parse()?;
 
-    run_yamux_server(host, port).await.unwrap();
-    Ok(())
+    return run_yamux_server(host, port).await;
 }
 
 async fn run_yamux_server(host: &str, port: u16) -> Result<()> {
