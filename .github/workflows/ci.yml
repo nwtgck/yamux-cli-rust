@@ -57,6 +57,9 @@ jobs:
     steps:
       - name: Run Nginx
         run: docker run -d -p 8080:80 nginx:alpine
+      - run: sudo apt install -y socat
+      - name: Serve Unix domain socket
+        run: socat UNIX-LISTEN:/tmp/my_nginx_socat,fork TCP:localhost:8080 &
       - name: Download the artifact (cross build)
         uses: actions/download-artifact@v2
         with:
@@ -87,6 +90,32 @@ jobs:
           # HTTP GET request twice
           diff expected_response.txt <(curl localhost:8081)
           diff expected_response.txt <(curl localhost:8081)
+          kill %1
+          rm my_pipe
+      - name: Unix domain socket (connect)
+        run: |
+          set -eu
+          cp ./yamux-x86_64-unknown-linux-musl/yamux yamux
+          mkfifo my_pipe
+          cat my_pipe | ./yamux -U /tmp/my_nginx_socat | ./yamux -l 8081 > ./my_pipe &
+          sleep 1
+          curl localhost:8080 > expected_response.txt
+          # HTTP GET request twice
+          diff expected_response.txt <(curl localhost:8081)
+          diff expected_response.txt <(curl localhost:8081)
+          kill %1
+          rm my_pipe
+      - name: Unix domain socket (listen)
+        run: |
+          set -eu
+          cp ./yamux-x86_64-unknown-linux-musl/yamux yamux
+          mkfifo my_pipe
+          cat my_pipe | ./yamux localhost 8080 | ./yamux -l -U /tmp/my_unginx > ./my_pipe &
+          sleep 1
+          curl localhost:8080 > expected_response.txt
+          # HTTP GET request twice
+          diff expected_response.txt <(curl --unix-socket /tmp/my_unginx http:/index.html)
+          diff expected_response.txt <(curl --unix-socket /tmp/my_unginx http:/index.html)
           kill %1
           rm my_pipe
 
