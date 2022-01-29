@@ -110,8 +110,8 @@ async fn run_yamux_server(
                     use futures::AsyncReadExt;
                     yamux_stream.split()
                 };
-                let tcp_stream_result = connect_setting.connect().await;
-                if let Err(err) = tcp_stream_result {
+                let stream_read_write_result = connect_setting.connect().await;
+                if let Err(err) = stream_read_write_result {
                     match connect_setting {
                         listen_and_connect::ConnectSetting::TcpConnectSetting { host, port } => {
                             log::warn!("failed to connect {:}:{:}: {:}", host, port, err)
@@ -123,16 +123,16 @@ async fn run_yamux_server(
                     }
                     return Ok(());
                 }
-                let (mut tcp_stream_read, mut tcp_stream_write) = tcp_stream_result.unwrap();
+                let (mut stream_read, mut stream_write) = stream_read_write_result.unwrap();
                 let fut1 = async move {
                     use tokio_util::compat::FuturesAsyncReadCompatExt;
-                    tokio::io::copy(&mut yamux_stream_read.compat(), &mut tcp_stream_write)
+                    tokio::io::copy(&mut yamux_stream_read.compat(), &mut stream_write)
                         .await
                         .unwrap();
                 };
                 let fut2 = async move {
                     use tokio_util::compat::FuturesAsyncWriteCompatExt;
-                    tokio::io::copy(&mut tcp_stream_read, &mut yamux_stream_write.compat_write())
+                    tokio::io::copy(&mut stream_read, &mut yamux_stream_write.compat_write())
                         .await
                         .unwrap();
                 };
