@@ -28,7 +28,7 @@ async fn main() -> anyhow::Result<()> {
 
     if args.listen {
         let mut host: &str = "0.0.0.0";
-        let mut port: u16 = 0;
+        let port: u16;
         if args.rest_args.len() == 2 {
             host = &args.rest_args[0];
             port = args.rest_args[1].parse()?;
