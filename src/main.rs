@@ -41,14 +41,17 @@ async fn main() -> Result<()> {
 }
 
 async fn run_yamux_server(host: &str, port: u16) -> Result<()> {
-    use futures::{AsyncReadExt, TryStreamExt};
+    use futures::TryStreamExt;
 
     let yamux_config = yamux::Config::default();
     let yamux_server =
         yamux::Connection::new(stdio::Stdio::new(), yamux_config, yamux::Mode::Server);
     yamux::into_stream(yamux_server)
         .try_for_each_concurrent(None, |yamux_stream| async move {
-            let (yamux_stream_read, yamux_write) = yamux_stream.split();
+            let (yamux_stream_read, yamux_write) = {
+                use futures::AsyncReadExt;
+                yamux_stream.split()
+            };
             let (mut connection_read, mut connection_write) =
                 tokio::net::TcpStream::connect((host, port))
                     .await?
@@ -73,8 +76,6 @@ async fn run_yamux_server(host: &str, port: u16) -> Result<()> {
 }
 
 async fn run_yamux_client() -> Result<()> {
-    use futures::AsyncReadExt;
-
     let yamux_config = yamux::Config::default();
     let yamux_client =
         yamux::Connection::new(stdio::Stdio::new(), yamux_config, yamux::Mode::Client);
@@ -101,7 +102,10 @@ async fn run_yamux_client() -> Result<()> {
                 eprintln!("failed to open: {:?}", err);
                 return;
             }
-            let (yamux_stream_read, yamux_stream_write) = yamux_stream_result.unwrap().split();
+            let (yamux_stream_read, yamux_stream_write) = {
+                use futures::AsyncReadExt;
+                yamux_stream_result.unwrap().split()
+            };
 
             let fut1 = async move {
                 use tokio_util::compat::FuturesAsyncReadCompatExt;
