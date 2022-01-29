@@ -25,13 +25,22 @@ async fn main() -> Result<()> {
     let args = Args::parse();
 
     if args.listen {
-        return run_yamux_client().await;
+        let mut host: &str = "0.0.0.0";
+        let mut port: u16 = 0;
+        if args.rest_args.len() == 2 {
+            host = &args.rest_args[0];
+            port = args.rest_args[1].parse()?;
+        } else if args.rest_args.len() == 1 {
+            port = args.rest_args[0].parse()?;
+        } else {
+            return Err(anyhow::Error::msg("port number is missing"));
+        }
+        return run_yamux_client(host, port).await;
     }
 
     if args.rest_args.len() != 2 {
         return Err(anyhow::Error::msg("host and port number are missing"));
     }
-
     // NOTE: should not use std::net::IpAddr because "localhost" could not be the type
     let host: &str = &args.rest_args[0];
     let port: u16 = args.rest_args[1].parse()?;
@@ -74,7 +83,7 @@ async fn run_yamux_server(host: &str, port: u16) -> Result<()> {
     Ok(())
 }
 
-async fn run_yamux_client() -> Result<()> {
+async fn run_yamux_client(host: &str, port: u16) -> Result<()> {
     let yamux_config = yamux::Config::default();
     let yamux_client =
         yamux::Connection::new(stdio::Stdio::new(), yamux_config, yamux::Mode::Client);
@@ -86,8 +95,7 @@ async fn run_yamux_client() -> Result<()> {
         yamux_stream.for_each(|_| async {})
     });
 
-    // TODO: hard code
-    let tcp_listener = tokio::net::TcpListener::bind("127.0.0.1:3322").await?;
+    let tcp_listener = tokio::net::TcpListener::bind((host, port)).await?;
 
     loop {
         let (socket, _) = tcp_listener.accept().await?;
