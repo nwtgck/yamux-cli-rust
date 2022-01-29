@@ -3,8 +3,11 @@ mod stdio;
 use anyhow::Result;
 use clap::Parser;
 
-// TODO: better usage
+// TODO: variable names
+// TODO: logging
+
 /// yamux
+/// Examples: `yamux localhost 80`, `yamux -l 8080`
 #[derive(clap::Parser, Debug)]
 #[clap(name = "yamux")]
 #[clap(about, version)]
@@ -15,7 +18,7 @@ struct Args {
     listen: bool,
 
     /// arguments
-    #[clap(group = "input")]
+    #[clap(name = "ARGUMENTS")]
     rest_args: Vec<String>,
 }
 
