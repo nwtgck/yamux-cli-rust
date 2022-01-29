@@ -17,3 +17,5 @@ pin-project-lite = "0.2"
 clap = { version = "3.0.13", features = ["derive"] }
 log = "0.4"
 env_logger = "0.9"
+auto_enums = { version = "0.7", features = ["tokio1"] }
+cfg-if = "1.0"
