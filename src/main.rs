@@ -71,7 +71,7 @@ async fn main() -> anyhow::Result<()> {
         }
         cfg_if::cfg_if! {
             if #[cfg(unix)] {
-                connector = listen_and_connect::Connector::Unix {path: args.rest_args[0].to_string()};
+                connector = listen_and_connect::Connector::Unix {path: &args.rest_args[0]};
             } else {
                 return Err(anyhow::Error::msg("unix domain socket not supported"));
             }
@@ -83,16 +83,12 @@ async fn main() -> anyhow::Result<()> {
         // NOTE: should not use std::net::IpAddr because "localhost" could not be the type
         let host: &str = &args.rest_args[0];
         let port: u16 = args.rest_args[1].parse()?;
-
-        connector = listen_and_connect::Connector::Tcp {
-            host: host.to_string(),
-            port,
-        };
+        connector = listen_and_connect::Connector::Tcp { host, port };
     }
     return run_yamux_server(connector).await;
 }
 
-async fn run_yamux_server(connector: listen_and_connect::Connector) -> anyhow::Result<()> {
+async fn run_yamux_server<'a>(connector: listen_and_connect::Connector<'a>) -> anyhow::Result<()> {
     use futures::TryStreamExt;
 
     let yamux_config = yamux::Config::default();
@@ -106,7 +102,7 @@ async fn run_yamux_server(connector: listen_and_connect::Connector) -> anyhow::R
                     use futures::AsyncReadExt;
                     yamux_stream.split()
                 };
-                let stream_read_write_result = connector.connect().await;
+                let stream_read_write_result = connector.clone().connect().await;
                 if let Err(err) = stream_read_write_result {
                     match connector {
                         listen_and_connect::Connector::Tcp { host, port } => {
