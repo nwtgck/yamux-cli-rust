@@ -157,9 +157,7 @@ async fn run_yamux_client(listener: listen_and_connect::Listener) -> anyhow::Res
     });
 
     loop {
-        let (mut listener_read, mut listener_write) =
-            futures::future::poll_fn(|cx| listener.poll_accept(cx)).await?;
-
+        let (mut listener_read, mut listener_write) = listener.accept().await?;
         let mut yamux_control = yamux_control.clone();
         tokio::task::spawn(async move {
             let yamux_stream_result = yamux_control.open_stream().await;

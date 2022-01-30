@@ -52,20 +52,17 @@ fn unix_stream_to_enum(
 }
 
 impl Listener {
-    pub fn poll_accept(
-        &self,
-        cx: &mut core::task::Context<'_>,
-    ) -> core::task::Poll<tokio::io::Result<(TcpOrUnixAsyncRead, TcpOrUnixAsyncWrite)>> {
+    pub async fn accept(&self) -> tokio::io::Result<(TcpOrUnixAsyncRead, TcpOrUnixAsyncWrite)> {
         match self {
-            Listener::TcpListener(tcp_listener) => {
-                let poll = tcp_listener.poll_accept(cx);
-                poll.map_ok(|(stream, _)| tcp_stream_to_enum(stream))
-            }
+            Listener::TcpListener(tcp_listener) => tcp_listener
+                .accept()
+                .await
+                .map(|(stream, _)| tcp_stream_to_enum(stream)),
             #[cfg(unix)]
-            Listener::UnixListener(unix_listener) => {
-                let poll = unix_listener.poll_accept(cx);
-                poll.map_ok(|(stream, _)| unix_stream_to_enum(stream))
-            }
+            Listener::UnixListener(unix_listener) => unix_listener
+                .accept()
+                .await
+                .map(|(stream, _)| unix_stream_to_enum(stream)),
         }
     }
 }
