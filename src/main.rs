@@ -11,11 +11,11 @@ use clap::Parser;
 #[clap(global_setting(clap::AppSettings::DeriveDisplayOrder))]
 struct Args {
     /// listens
-    #[clap(long, short = 'l')]
+    #[clap(name = "listen", long, short = 'l')]
     listen: bool,
 
     /// uses Unix-domain socket
-    #[clap(short = 'U')]
+    #[clap(name = "unixsock", short = 'U')]
     unixsock: bool,
 
     /// arguments
