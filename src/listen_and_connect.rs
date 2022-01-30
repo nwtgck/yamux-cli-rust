@@ -68,27 +68,25 @@ impl Listener {
 }
 
 #[derive(Clone)]
-pub enum ConnectSetting {
-    TcpConnectSetting {
+pub enum Connector {
+    Tcp {
         host: String,
         port: u16,
     },
     #[cfg(unix)]
-    UnixConnectSetting {
+    Unix {
         path: String,
     },
 }
 
-impl ConnectSetting {
+impl Connector {
     pub async fn connect(&self) -> tokio::io::Result<(TcpOrUnixAsyncRead, TcpOrUnixAsyncWrite)> {
         match self {
-            ConnectSetting::TcpConnectSetting { host, port } => {
-                tokio::net::TcpStream::connect((host.as_str(), *port))
-                    .await
-                    .map(tcp_stream_to_enum)
-            }
+            Connector::Tcp { host, port } => tokio::net::TcpStream::connect((host.as_str(), *port))
+                .await
+                .map(tcp_stream_to_enum),
             #[cfg(unix)]
-            ConnectSetting::UnixConnectSetting { path } => tokio::net::UnixStream::connect(path)
+            Connector::Unix { path } => tokio::net::UnixStream::connect(path)
                 .await
                 .map(unix_stream_to_enum),
         }

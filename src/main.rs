@@ -64,16 +64,14 @@ async fn main() -> anyhow::Result<()> {
         return run_yamux_client(listener).await;
     }
 
-    let connect_setting: listen_and_connect::ConnectSetting;
+    let connector: listen_and_connect::Connector;
     if args.unixsock {
         if args.rest_args.len() != 1 {
             return Err(anyhow::Error::msg("Unix domain socket is missing"));
         }
         cfg_if::cfg_if! {
             if #[cfg(unix)] {
-                connect_setting = listen_and_connect::ConnectSetting::UnixConnectSetting {
-                    path: args.rest_args[0].to_string(),
-                };
+                connector = listen_and_connect::Connector::Unix {path: args.rest_args[0].to_string()};
             } else {
                 return Err(anyhow::Error::msg("unix domain socket not supported"));
             }
@@ -86,17 +84,15 @@ async fn main() -> anyhow::Result<()> {
         let host: &str = &args.rest_args[0];
         let port: u16 = args.rest_args[1].parse()?;
 
-        connect_setting = listen_and_connect::ConnectSetting::TcpConnectSetting {
+        connector = listen_and_connect::Connector::Tcp {
             host: host.to_string(),
             port,
         };
     }
-    return run_yamux_server(connect_setting).await;
+    return run_yamux_server(connector).await;
 }
 
-async fn run_yamux_server(
-    connect_setting: listen_and_connect::ConnectSetting,
-) -> anyhow::Result<()> {
+async fn run_yamux_server(connector: listen_and_connect::Connector) -> anyhow::Result<()> {
     use futures::TryStreamExt;
 
     let yamux_config = yamux::Config::default();
@@ -104,20 +100,20 @@ async fn run_yamux_server(
         yamux::Connection::new(stdio::Stdio::new(), yamux_config, yamux::Mode::Server);
     yamux::into_stream(yamux_connection)
         .try_for_each_concurrent(None, |yamux_stream| {
-            let connect_setting = connect_setting.clone();
+            let connector = connector.clone();
             async move {
                 let (yamux_stream_read, yamux_stream_write) = {
                     use futures::AsyncReadExt;
                     yamux_stream.split()
                 };
-                let stream_read_write_result = connect_setting.connect().await;
+                let stream_read_write_result = connector.connect().await;
                 if let Err(err) = stream_read_write_result {
-                    match connect_setting {
-                        listen_and_connect::ConnectSetting::TcpConnectSetting { host, port } => {
+                    match connector {
+                        listen_and_connect::Connector::Tcp { host, port } => {
                             log::warn!("failed to connect {:}:{:}: {:}", host, port, err)
                         }
                         #[cfg(unix)]
-                        listen_and_connect::ConnectSetting::UnixConnectSetting { path } => {
+                        listen_and_connect::Connector::Unix { path } => {
                             log::warn!("failed to connect {:}: {:}", path, err)
                         }
                     }
