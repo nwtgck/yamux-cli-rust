@@ -83,9 +83,7 @@ pub enum ConnectSetting {
 }
 
 impl ConnectSetting {
-    pub async fn connect(
-        self: &Self,
-    ) -> tokio::io::Result<(TcpOrUnixAsyncRead, TcpOrUnixAsyncWrite)> {
+    pub async fn connect(&self) -> tokio::io::Result<(TcpOrUnixAsyncRead, TcpOrUnixAsyncWrite)> {
         match self {
             ConnectSetting::TcpConnectSetting { host, port } => {
                 tokio::net::TcpStream::connect((host.as_str(), *port))
