@@ -1,65 +1,67 @@
 pub enum Listener {
-    TcpListener(tokio::net::TcpListener),
+    Tcp(tokio::net::TcpListener),
     #[cfg(unix)]
-    UnixListener(tokio::net::UnixListener),
+    Unix(tokio::net::UnixListener),
 }
 
 #[cfg(unix)]
 #[auto_enums::enum_derive(tokio1::AsyncRead)]
-pub enum TcpOrUnixAsyncRead {
-    TcpAsyncRead(tokio::net::tcp::OwnedReadHalf),
-    UnixAsyncRead(tokio::net::unix::OwnedReadHalf),
+pub enum TcpOrUnixOwnedHalfRead {
+    Tcp(tokio::net::tcp::OwnedReadHalf),
+    Unix(tokio::net::unix::OwnedReadHalf),
 }
 
 #[cfg(not(unix))]
 #[auto_enums::enum_derive(tokio1::AsyncRead)]
-pub enum TcpOrUnixAsyncRead {
-    TcpAsyncRead(tokio::net::tcp::OwnedReadHalf),
+pub enum TcpOrUnixOwnedHalfRead {
+    Tcp(tokio::net::tcp::OwnedReadHalf),
 }
 
 #[cfg(unix)]
 #[auto_enums::enum_derive(tokio1::AsyncWrite)]
-pub enum TcpOrUnixAsyncWrite {
-    TcpAsyncWrite(tokio::net::tcp::OwnedWriteHalf),
-    UnixAsyncWrite(tokio::net::unix::OwnedWriteHalf),
+pub enum TcpOrUnixOwnedHalfWrite {
+    Tcp(tokio::net::tcp::OwnedWriteHalf),
+    Unix(tokio::net::unix::OwnedWriteHalf),
 }
 
 #[cfg(not(unix))]
 #[auto_enums::enum_derive(tokio1::AsyncWrite)]
-pub enum TcpOrUnixAsyncWrite {
-    TcpAsyncWrite(tokio::net::tcp::OwnedWriteHalf),
+pub enum TcpOrUnixOwnedHalfWrite {
+    Tcp(tokio::net::tcp::OwnedWriteHalf),
 }
 
 fn tcp_stream_to_enum(
     tcp_stream: tokio::net::TcpStream,
-) -> (TcpOrUnixAsyncRead, TcpOrUnixAsyncWrite) {
+) -> (TcpOrUnixOwnedHalfRead, TcpOrUnixOwnedHalfWrite) {
     let (r, w) = tcp_stream.into_split();
     (
-        TcpOrUnixAsyncRead::TcpAsyncRead(r),
-        TcpOrUnixAsyncWrite::TcpAsyncWrite(w),
+        TcpOrUnixOwnedHalfRead::Tcp(r),
+        TcpOrUnixOwnedHalfWrite::Tcp(w),
     )
 }
 
 #[cfg(unix)]
 fn unix_stream_to_enum(
     unix_stream: tokio::net::UnixStream,
-) -> (TcpOrUnixAsyncRead, TcpOrUnixAsyncWrite) {
+) -> (TcpOrUnixOwnedHalfRead, TcpOrUnixOwnedHalfWrite) {
     let (r, w) = unix_stream.into_split();
     (
-        TcpOrUnixAsyncRead::UnixAsyncRead(r),
-        TcpOrUnixAsyncWrite::UnixAsyncWrite(w),
+        TcpOrUnixOwnedHalfRead::Unix(r),
+        TcpOrUnixOwnedHalfWrite::Unix(w),
     )
 }
 
 impl Listener {
-    pub async fn accept(&self) -> tokio::io::Result<(TcpOrUnixAsyncRead, TcpOrUnixAsyncWrite)> {
+    pub async fn accept(
+        &self,
+    ) -> tokio::io::Result<(TcpOrUnixOwnedHalfRead, TcpOrUnixOwnedHalfWrite)> {
         match self {
-            Listener::TcpListener(tcp_listener) => tcp_listener
+            Listener::Tcp(tcp_listener) => tcp_listener
                 .accept()
                 .await
                 .map(|(stream, _)| tcp_stream_to_enum(stream)),
             #[cfg(unix)]
-            Listener::UnixListener(unix_listener) => unix_listener
+            Listener::Unix(unix_listener) => unix_listener
                 .accept()
                 .await
                 .map(|(stream, _)| unix_stream_to_enum(stream)),
@@ -80,7 +82,9 @@ pub enum Connector<'a> {
 }
 
 impl<'a> Connector<'a> {
-    pub async fn connect(self) -> tokio::io::Result<(TcpOrUnixAsyncRead, TcpOrUnixAsyncWrite)> {
+    pub async fn connect(
+        self,
+    ) -> tokio::io::Result<(TcpOrUnixOwnedHalfRead, TcpOrUnixOwnedHalfWrite)> {
         match self {
             Connector::Tcp { host, port } => tokio::net::TcpStream::connect((host, port))
                 .await

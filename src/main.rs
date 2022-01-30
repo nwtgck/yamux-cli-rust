@@ -39,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
             }
             cfg_if::cfg_if! {
                 if #[cfg(unix)] {
-                    listener = listen_and_connect::Listener::UnixListener(
+                    listener = listen_and_connect::Listener::Unix(
                         tokio::net::UnixListener::bind(&args.rest_args[0])?,
                     );
                 } else {
@@ -57,7 +57,7 @@ async fn main() -> anyhow::Result<()> {
             } else {
                 return Err(anyhow::Error::msg("port number is missing"));
             }
-            listener = listen_and_connect::Listener::TcpListener(
+            listener = listen_and_connect::Listener::Tcp(
                 tokio::net::TcpListener::bind((host, port)).await?,
             );
         }
