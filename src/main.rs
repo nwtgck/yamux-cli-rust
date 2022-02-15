@@ -217,8 +217,7 @@ async fn run_udp_yamux_client() -> anyhow::Result<()> {
         >,
     > = Arc::new(RwLock::new(HashMap::new()));
     loop {
-        let (len, addr) = udp_socket.recv_from(&mut buf[..]).await?;
-        eprintln!("recv_from {:?}: {:?}", addr, &buf[..10]);
+        let (len, addr) = udp_socket.recv_from(&mut buf[UDP_BYTES_LEN..]).await?;
         let addr_to_yamux_stream = addr_to_yamux_stream_write.clone();
         let mut yamux_control = yamux_control.clone();
         let udp_socket = udp_socket.clone();
@@ -271,9 +270,10 @@ async fn run_udp_yamux_client() -> anyhow::Result<()> {
 
             {
                 use futures::AsyncWriteExt;
+                use std::io::Write;
+                buf.as_mut().write_all(&(len as u32).to_be_bytes()).unwrap();
                 let mut guard = yamux_stream_write.lock().await;
-                guard.write_all(&(len as u32).to_be_bytes()).await.unwrap();
-                guard.write_all(&buf[..len]).await.unwrap();
+                guard.write_all(&buf[..UDP_BYTES_LEN + len]).await.unwrap();
             }
         });
     }
