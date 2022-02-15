@@ -2,6 +2,8 @@ mod listen_and_connect;
 mod stdio;
 
 use clap::Parser;
+use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 
 /// yamux
 /// Examples: `yamux localhost 80`, `yamux -l 8080`
@@ -18,6 +20,10 @@ struct Args {
     #[clap(name = "unixsock", short = 'U')]
     unixsock: bool,
 
+    /// UDP
+    #[clap(name = "udp", short = 'u')]
+    udp: bool,
+
     /// arguments
     #[clap(name = "ARGUMENTS")]
     rest_args: Vec<String>,
@@ -30,6 +36,11 @@ async fn main() -> anyhow::Result<()> {
 
     // Set default log level
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+
+    // TODO: handle properly
+    if args.udp {
+        return run_udp_yamux_client().await;
+    }
 
     if args.listen {
         let listener: listen_and_connect::Listener;
@@ -61,7 +72,7 @@ async fn main() -> anyhow::Result<()> {
                 tokio::net::TcpListener::bind((host, port)).await?,
             );
         }
-        return run_yamux_client(listener).await;
+        return run_tcp_yamux_client(listener).await;
     }
 
     let connector: listen_and_connect::Connector;
@@ -85,10 +96,12 @@ async fn main() -> anyhow::Result<()> {
         let port: u16 = args.rest_args[1].parse()?;
         connector = listen_and_connect::Connector::Tcp { host, port };
     }
-    return run_yamux_server(connector).await;
+    return run_tcp_yamux_server(connector).await;
 }
 
-async fn run_yamux_server<'a>(connector: listen_and_connect::Connector<'a>) -> anyhow::Result<()> {
+async fn run_tcp_yamux_server<'a>(
+    connector: listen_and_connect::Connector<'a>,
+) -> anyhow::Result<()> {
     use futures::TryStreamExt;
 
     let yamux_config = yamux::Config::default();
@@ -136,7 +149,7 @@ async fn run_yamux_server<'a>(connector: listen_and_connect::Connector<'a>) -> a
     Ok(())
 }
 
-async fn run_yamux_client(listener: listen_and_connect::Listener) -> anyhow::Result<()> {
+async fn run_tcp_yamux_client(listener: listen_and_connect::Listener) -> anyhow::Result<()> {
     let yamux_config = yamux::Config::default();
     let yamux_client =
         yamux::Connection::new(stdio::Stdio::new(), yamux_config, yamux::Mode::Client);
@@ -174,6 +187,94 @@ async fn run_yamux_client(listener: listen_and_connect::Listener) -> anyhow::Res
                     .unwrap();
             };
             futures::future::join(fut1, fut2).await;
+        });
+    }
+}
+
+const UDP_BYTES_LEN: usize = 4;
+
+async fn run_udp_yamux_client() -> anyhow::Result<()> {
+    let yamux_config = yamux::Config::default();
+    let yamux_client =
+        yamux::Connection::new(stdio::Stdio::new(), yamux_config, yamux::Mode::Client);
+    let yamux_control = yamux_client.control();
+
+    let yamux_stream = yamux::into_stream(yamux_client);
+    tokio::task::spawn({
+        use futures::StreamExt;
+        yamux_stream.for_each(|_| async {})
+    });
+
+    // TODO: hard code
+    let udp_socket = Arc::new(tokio::net::UdpSocket::bind(("0.0.0.0", 9443)).await?);
+    let mut buf = [0u8; 65536];
+    let addr_to_yamux_stream_write: Arc<
+        RwLock<
+            HashMap<
+                std::net::SocketAddr,
+                Arc<tokio::sync::Mutex<futures::io::WriteHalf<yamux::Stream>>>,
+            >,
+        >,
+    > = Arc::new(RwLock::new(HashMap::new()));
+    loop {
+        let (len, addr) = udp_socket.recv_from(&mut buf[..]).await?;
+        eprintln!("recv_from {:?}: {:?}", addr, &buf[..10]);
+        let addr_to_yamux_stream = addr_to_yamux_stream_write.clone();
+        let mut yamux_control = yamux_control.clone();
+        let udp_socket = udp_socket.clone();
+        tokio::task::spawn(async move {
+            let yamux_stream_write_option =
+                addr_to_yamux_stream.read().unwrap().get(&addr).cloned();
+            let yamux_stream_write = if let Some(yamux_stream_write) = yamux_stream_write_option {
+                yamux_stream_write
+            } else {
+                let yamux_stream_result = yamux_control.open_stream().await;
+                if let Err(err) = yamux_stream_result {
+                    log::error!("failed to open stream: {:}", err);
+                    return;
+                }
+                let (mut yamux_stream_read, yamux_stream_write) = {
+                    use futures::AsyncReadExt;
+                    let yamux_stream = yamux_stream_result.unwrap();
+                    yamux_stream.split()
+                };
+
+                let yamux_stream_write_mutex_arc =
+                    Arc::new(tokio::sync::Mutex::new(yamux_stream_write));
+
+                // TODO: expire
+                addr_to_yamux_stream
+                    .write()
+                    .unwrap()
+                    .insert(addr, yamux_stream_write_mutex_arc.clone());
+
+                tokio::task::spawn(async move {
+                    use futures::AsyncReadExt;
+                    let mut buf = [0u8; 65536];
+                    while let Ok(_) = yamux_stream_read
+                        .read_exact(&mut buf[..UDP_BYTES_LEN])
+                        .await
+                    {
+                        let l: usize =
+                            u32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]) as usize;
+                        if let Err(_) = yamux_stream_read.read_exact(&mut buf[..l]).await {
+                            return;
+                        }
+                        if let Err(_) = udp_socket.send_to(&buf[..l], addr.clone()).await {
+                            return;
+                        }
+                    }
+                });
+
+                yamux_stream_write_mutex_arc
+            };
+
+            {
+                use futures::AsyncWriteExt;
+                let mut guard = yamux_stream_write.lock().await;
+                guard.write_all(&(len as u32).to_be_bytes()).await.unwrap();
+                guard.write_all(&buf[..len]).await.unwrap();
+            }
         });
     }
 }
