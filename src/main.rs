@@ -39,7 +39,10 @@ async fn main() -> anyhow::Result<()> {
 
     // TODO: handle properly
     if args.udp {
-        return run_udp_yamux_client().await;
+        if args.listen {
+            return run_udp_yamux_client().await;
+        }
+        return run_udp_yamux_server().await;
     }
 
     if args.listen {
@@ -277,4 +280,61 @@ async fn run_udp_yamux_client() -> anyhow::Result<()> {
             }
         });
     }
+}
+
+async fn run_udp_yamux_server() -> anyhow::Result<()> {
+    use futures::TryStreamExt;
+
+    let yamux_config = yamux::Config::default();
+    let yamux_connection =
+        yamux::Connection::new(stdio::Stdio::new(), yamux_config, yamux::Mode::Server);
+    yamux::into_stream(yamux_connection)
+        .try_for_each_concurrent(None, |yamux_stream| {
+            async move {
+                let (mut yamux_stream_read, mut yamux_stream_write) = {
+                    use futures::AsyncReadExt;
+                    yamux_stream.split()
+                };
+
+                let udp_socket = tokio::net::UdpSocket::bind(("0.0.0.0", 0)).await?;
+                // TODO: hard code
+                udp_socket.connect("127.0.0.1:8443").await?;
+
+                let fut1 = async {
+                    let mut buf = [0u8; 65536];
+                    while let Ok((len, _)) = udp_socket.recv_from(&mut buf[UDP_BYTES_LEN..]).await {
+                        use futures::AsyncWriteExt;
+                        use std::io::Write;
+                        buf.as_mut().write_all(&(len as u32).to_be_bytes()).unwrap();
+                        yamux_stream_write
+                            .write_all(&buf[..UDP_BYTES_LEN + len])
+                            .await
+                            .unwrap();
+                    }
+                };
+
+                let fut2 = async {
+                    use futures::AsyncReadExt;
+                    let mut buf = [0u8; 65536];
+                    while let Ok(_) = yamux_stream_read
+                        .read_exact(&mut buf[..UDP_BYTES_LEN])
+                        .await
+                    {
+                        let len =
+                            u32::from_be_bytes(buf[..UDP_BYTES_LEN].try_into().unwrap()) as usize;
+                        if let Err(_) = yamux_stream_read.read_exact(&mut buf[..len]).await {
+                            break;
+                        }
+                        if let Err(_) = udp_socket.send(&buf[..len]).await {
+                            break;
+                        }
+                    }
+                };
+
+                futures::future::join(fut1, fut2).await;
+                Ok(())
+            }
+        })
+        .await?;
+    Ok(())
 }
