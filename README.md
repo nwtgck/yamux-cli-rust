@@ -48,6 +48,16 @@ Other binaries are found in <https://github.com/nwtgck/yamux-cli-rust/releases>.
 ... | yamux -U -l /unix/domain/socket/path | ...
 ```
 
+### UDP
+
+```bash
+... | yamux -u 1.1.1.1 53 | ...
+```
+
+```bash
+... | yamux -ul 1053 | ...
+```
+
 ## Complete example
 
 Here is a complete simple example, but not useful. This is forwarding local 80 port to local 8080 port.
