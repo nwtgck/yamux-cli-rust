@@ -258,7 +258,7 @@ async fn run_udp_yamux_client() -> anyhow::Result<()> {
                         .await
                     {
                         let l: usize =
-                            u32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]) as usize;
+                            u32::from_be_bytes(buf[..UDP_BYTES_LEN].try_into().unwrap()) as usize;
                         if let Err(_) = yamux_stream_read.read_exact(&mut buf[..l]).await {
                             return;
                         }
