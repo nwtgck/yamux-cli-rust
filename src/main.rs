@@ -37,12 +37,13 @@ async fn main() -> anyhow::Result<()> {
     // Set default log level
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
-    // TODO: handle properly
     if args.udp {
         if args.listen {
-            return run_udp_yamux_client().await;
+            let (host, port) = listen_host_and_port_from_args(&args.rest_args)?;
+            return run_udp_yamux_client(host, port).await;
         }
-        return run_udp_yamux_server().await;
+        let (host, port) = connect_host_and_port_from_args(&args.rest_args)?;
+        return run_udp_yamux_server(host, port).await;
     }
 
     if args.listen {
@@ -61,16 +62,7 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         } else {
-            let mut host: &str = "0.0.0.0";
-            let port: u16;
-            if args.rest_args.len() == 2 {
-                host = &args.rest_args[0];
-                port = args.rest_args[1].parse()?;
-            } else if args.rest_args.len() == 1 {
-                port = args.rest_args[0].parse()?;
-            } else {
-                return Err(anyhow::Error::msg("port number is missing"));
-            }
+            let (host, port) = listen_host_and_port_from_args(&args.rest_args)?;
             listener = listen_and_connect::Listener::Tcp(
                 tokio::net::TcpListener::bind((host, port)).await?,
             );
@@ -91,15 +83,38 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     } else {
-        if args.rest_args.len() != 2 {
-            return Err(anyhow::Error::msg("host and port number are missing"));
-        }
-        // NOTE: should not use std::net::IpAddr because "localhost" could not be the type
-        let host: &str = &args.rest_args[0];
-        let port: u16 = args.rest_args[1].parse()?;
+        let (host, port) = connect_host_and_port_from_args(&args.rest_args)?;
         connector = listen_and_connect::Connector::Tcp { host, port };
     }
     return run_tcp_yamux_server(connector).await;
+}
+
+fn listen_host_and_port_from_args<'a>(
+    rest_args: &'a Vec<String>,
+) -> anyhow::Result<(&'a str, u16)> {
+    let mut host: &'a str = "0.0.0.0";
+    let port: u16;
+    if rest_args.len() == 2 {
+        host = &rest_args[0];
+        port = rest_args[1].parse()?;
+    } else if rest_args.len() == 1 {
+        port = rest_args[0].parse()?;
+    } else {
+        return Err(anyhow::Error::msg("port number is missing"));
+    }
+    return Ok((host, port));
+}
+
+fn connect_host_and_port_from_args<'a>(
+    rest_args: &'a Vec<String>,
+) -> anyhow::Result<(&'a str, u16)> {
+    if rest_args.len() != 2 {
+        return Err(anyhow::Error::msg("host and port number are missing"));
+    }
+    // NOTE: should not use std::net::IpAddr because "localhost" could not be the type
+    let host: &'a str = &rest_args[0];
+    let port: u16 = rest_args[1].parse()?;
+    return Ok((host, port));
 }
 
 async fn run_tcp_yamux_server<'a>(
@@ -196,7 +211,7 @@ async fn run_tcp_yamux_client(listener: listen_and_connect::Listener) -> anyhow:
 
 const UDP_BYTES_LEN: usize = 4;
 
-async fn run_udp_yamux_client() -> anyhow::Result<()> {
+async fn run_udp_yamux_client(host: &str, port: u16) -> anyhow::Result<()> {
     let yamux_config = yamux::Config::default();
     let yamux_client =
         yamux::Connection::new(stdio::Stdio::new(), yamux_config, yamux::Mode::Client);
@@ -208,8 +223,7 @@ async fn run_udp_yamux_client() -> anyhow::Result<()> {
         yamux_stream.for_each(|_| async {})
     });
 
-    // TODO: hard code
-    let udp_socket = Arc::new(tokio::net::UdpSocket::bind(("0.0.0.0", 9443)).await?);
+    let udp_socket = Arc::new(tokio::net::UdpSocket::bind((host, port)).await?);
     let mut buf = [0u8; 65536];
     let addr_to_yamux_stream_write: Arc<
         RwLock<
@@ -282,58 +296,54 @@ async fn run_udp_yamux_client() -> anyhow::Result<()> {
     }
 }
 
-async fn run_udp_yamux_server() -> anyhow::Result<()> {
+async fn run_udp_yamux_server(host: &str, port: u16) -> anyhow::Result<()> {
     use futures::TryStreamExt;
 
     let yamux_config = yamux::Config::default();
     let yamux_connection =
         yamux::Connection::new(stdio::Stdio::new(), yamux_config, yamux::Mode::Server);
     yamux::into_stream(yamux_connection)
-        .try_for_each_concurrent(None, |yamux_stream| {
-            async move {
-                let (mut yamux_stream_read, mut yamux_stream_write) = {
-                    use futures::AsyncReadExt;
-                    yamux_stream.split()
-                };
+        .try_for_each_concurrent(None, |yamux_stream| async move {
+            let (mut yamux_stream_read, mut yamux_stream_write) = {
+                use futures::AsyncReadExt;
+                yamux_stream.split()
+            };
 
-                let udp_socket = tokio::net::UdpSocket::bind(("0.0.0.0", 0)).await?;
-                // TODO: hard code
-                udp_socket.connect("127.0.0.1:8443").await?;
+            let udp_socket = tokio::net::UdpSocket::bind(("0.0.0.0", 0)).await?;
+            udp_socket.connect((host, port)).await?;
 
-                let fut1 = async {
-                    let mut buf = [0u8; 65536];
-                    while let Ok((len, _)) = udp_socket.recv_from(&mut buf[UDP_BYTES_LEN..]).await {
-                        use futures::AsyncWriteExt;
-                        use std::io::Write;
-                        buf.as_mut().write_all(&(len as u32).to_be_bytes()).unwrap();
-                        yamux_stream_write
-                            .write_all(&buf[..UDP_BYTES_LEN + len])
-                            .await
-                            .unwrap();
-                    }
-                };
-
-                let fut2 = async {
-                    use futures::AsyncReadExt;
-                    let mut buf = [0u8; 65536];
-                    while let Ok(_) = yamux_stream_read
-                        .read_exact(&mut buf[..UDP_BYTES_LEN])
+            let fut1 = async {
+                let mut buf = [0u8; 65536];
+                while let Ok((len, _)) = udp_socket.recv_from(&mut buf[UDP_BYTES_LEN..]).await {
+                    use futures::AsyncWriteExt;
+                    use std::io::Write;
+                    buf.as_mut().write_all(&(len as u32).to_be_bytes()).unwrap();
+                    yamux_stream_write
+                        .write_all(&buf[..UDP_BYTES_LEN + len])
                         .await
-                    {
-                        let len =
-                            u32::from_be_bytes(buf[..UDP_BYTES_LEN].try_into().unwrap()) as usize;
-                        if let Err(_) = yamux_stream_read.read_exact(&mut buf[..len]).await {
-                            break;
-                        }
-                        if let Err(_) = udp_socket.send(&buf[..len]).await {
-                            break;
-                        }
-                    }
-                };
+                        .unwrap();
+                }
+            };
 
-                futures::future::join(fut1, fut2).await;
-                Ok(())
-            }
+            let fut2 = async {
+                use futures::AsyncReadExt;
+                let mut buf = [0u8; 65536];
+                while let Ok(_) = yamux_stream_read
+                    .read_exact(&mut buf[..UDP_BYTES_LEN])
+                    .await
+                {
+                    let len = u32::from_be_bytes(buf[..UDP_BYTES_LEN].try_into().unwrap()) as usize;
+                    if let Err(_) = yamux_stream_read.read_exact(&mut buf[..len]).await {
+                        break;
+                    }
+                    if let Err(_) = udp_socket.send(&buf[..len]).await {
+                        break;
+                    }
+                }
+            };
+
+            futures::future::join(fut1, fut2).await;
+            Ok(())
         })
         .await?;
     Ok(())
