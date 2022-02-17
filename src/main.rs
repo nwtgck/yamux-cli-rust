@@ -309,7 +309,7 @@ async fn run_udp_yamux_server(host: &str, port: u16) -> anyhow::Result<()> {
                 yamux_stream.split()
             };
 
-            let udp_socket = tokio::net::UdpSocket::bind(("0.0.0.0", 0)).await?;
+            let udp_socket = tokio::net::UdpSocket::bind(("127.0.0.1", 0)).await?;
             udp_socket.connect((host, port)).await?;
 
             let fut1 = async {
