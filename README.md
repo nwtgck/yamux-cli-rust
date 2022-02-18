@@ -6,21 +6,21 @@ Multiplexing TCP connection CLI using [yamux](https://github.com/hashicorp/yamux
 ### Linux
 
 ```bash
-curl -L https://github.com/nwtgck/yamux-cli-rust/releases/download/v0.2.0/yamux-x86_64-unknown-linux-musl.tar.gz | tar xzf -
+curl -L https://github.com/nwtgck/yamux-cli-rust/releases/download/v0.2.1/yamux-x86_64-unknown-linux-musl.tar.gz | tar xzf -
 ./yamux-x86_64-unknown-linux-musl/yamux --help
 ```
 
 ### macOS (Intel)
 
 ```bash
-curl -L https://github.com/nwtgck/yamux-cli-rust/releases/download/v0.2.0/yamux-x86_64-apple-darwin.tar.gz | tar xzf -
+curl -L https://github.com/nwtgck/yamux-cli-rust/releases/download/v0.2.1/yamux-x86_64-apple-darwin.tar.gz | tar xzf -
 ./yamux-x86_64-apple-darwin/yamux --help
 ```
 
 ### macOS (Apple Silicon)
 
 ```bash
-curl -L https://github.com/nwtgck/yamux-cli-rust/releases/download/v0.2.0/yamux-aarch64-apple-darwin.tar.gz | tar xzf -
+curl -L https://github.com/nwtgck/yamux-cli-rust/releases/download/v0.2.1/yamux-aarch64-apple-darwin.tar.gz | tar xzf -
 ./yamux-aarch64-apple-darwin/yamux --help
 ```
 
@@ -46,6 +46,16 @@ Other binaries are found in <https://github.com/nwtgck/yamux-cli-rust/releases>.
 
 ```bash
 ... | yamux -U -l /unix/domain/socket/path | ...
+```
+
+### UDP
+
+```bash
+... | yamux -u 1.1.1.1 53 | ...
+```
+
+```bash
+... | yamux -ul 1053 | ...
 ```
 
 ## Complete example

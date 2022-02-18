@@ -1,6 +1,6 @@
 [package]
 name = "yamux-cli"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 
 [[bin]]
@@ -11,10 +11,10 @@ path = "src/main.rs"
 yamux = "0.10"
 futures = { version = "0.3", default-features = false, features = ["std"] }
 tokio = { version = "1.16", features = ["rt-multi-thread", "macros", "net", "io-std", "io-util"] }
-tokio-util = { version = "0.6", features=["compat"] }
+tokio-util = { version = "0.7", features=["compat"] }
 anyhow = "1.0"
 pin-project-lite = "0.2"
-clap = { version = "3.0.13", features = ["derive"] }
+clap = { version = "3.0.14", features = ["derive"] }
 log = "0.4"
 env_logger = "0.9"
 auto_enums = { version = "0.7", features = ["tokio1"] }
