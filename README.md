@@ -1,26 +1,26 @@
 # yamux
 [![CI](https://github.com/nwtgck/yamux-cli-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/nwtgck/yamux-cli-rust/actions/workflows/ci.yml)
 
-Multiplexing TCP connection CLI using [yamux](https://github.com/hashicorp/yamux/blob/master/spec.md)
+CLI of multiplexing TCP and UDP using [yamux](https://github.com/hashicorp/yamux/blob/master/spec.md)
 
 ### Linux
 
 ```bash
-curl -L https://github.com/nwtgck/yamux-cli-rust/releases/download/v0.2.1/yamux-x86_64-unknown-linux-musl.tar.gz | tar xzf -
+curl -L https://github.com/nwtgck/yamux-cli-rust/releases/download/v0.3.0/yamux-x86_64-unknown-linux-musl.tar.gz | tar xzf -
 ./yamux-x86_64-unknown-linux-musl/yamux --help
 ```
 
 ### macOS (Intel)
 
 ```bash
-curl -L https://github.com/nwtgck/yamux-cli-rust/releases/download/v0.2.1/yamux-x86_64-apple-darwin.tar.gz | tar xzf -
+curl -L https://github.com/nwtgck/yamux-cli-rust/releases/download/v0.3.0/yamux-x86_64-apple-darwin.tar.gz | tar xzf -
 ./yamux-x86_64-apple-darwin/yamux --help
 ```
 
 ### macOS (Apple Silicon)
 
 ```bash
-curl -L https://github.com/nwtgck/yamux-cli-rust/releases/download/v0.2.1/yamux-aarch64-apple-darwin.tar.gz | tar xzf -
+curl -L https://github.com/nwtgck/yamux-cli-rust/releases/download/v0.3.0/yamux-aarch64-apple-darwin.tar.gz | tar xzf -
 ./yamux-aarch64-apple-darwin/yamux --help
 ```
 
