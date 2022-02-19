@@ -17,11 +17,11 @@ struct Args {
     listen: bool,
 
     /// uses Unix-domain socket
-    #[clap(name = "unixsock", short = 'U')]
+    #[clap(name = "unixsock", long, short = 'U')]
     unixsock: bool,
 
     /// UDP
-    #[clap(name = "udp", short = 'u')]
+    #[clap(name = "udp", long, short = 'u')]
     udp: bool,
 
     /// arguments
