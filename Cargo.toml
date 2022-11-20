@@ -10,7 +10,7 @@ path = "src/main.rs"
 [dependencies]
 yamux = "0.10"
 futures = { version = "0.3", default-features = false, features = ["std"] }
-tokio = { version = "1.16", features = ["rt-multi-thread", "macros", "net", "io-std", "io-util"] }
+tokio = { version = "1.22", features = ["rt-multi-thread", "macros", "net", "io-std", "io-util"] }
 tokio-util = { version = "0.7", features=["compat"] }
 anyhow = "1.0"
 pin-project-lite = "0.2"
